@@ -30,6 +30,7 @@ import dev.foxikle.customnpcs.internal.menu.MenuItems;
 import dev.foxikle.customnpcs.internal.menu.MenuUtils;
 import dev.foxikle.customnpcs.internal.runnables.SoundRunnable;
 import dev.foxikle.customnpcs.internal.utils.Msg;
+import dev.foxikle.customnpcs.internal.utils.WaitingType;
 import io.github.mqzen.menus.base.Content;
 import io.github.mqzen.menus.base.Menu;
 import io.github.mqzen.menus.misc.Capacity;
@@ -46,6 +47,7 @@ import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -68,7 +70,7 @@ public class PlaySound extends Action {
                     event.setCancelled(true);
                     Player p = (Player) event.getWhoClicked();
                     p.playSound(Sound.sound(Key.key("minecraft:ui.button.click"), Sound.Source.MASTER, 1, 1));
-                    PlaySound actionImpl = new PlaySound("minecraft:ui.button.click", 1, 1, 0, Condition.SelectionMode.ONE, new ArrayList<>());
+                    PlaySound actionImpl = new PlaySound("minecraft:ui.button.click", 1, 1, 0, Condition.SelectionMode.ONE, new ArrayList<>(), 0);
                     CustomNPCs.getInstance().editingActions.put(p.getUniqueId(), actionImpl);
                     menuView.getAPI().openMenu(p, actionImpl.getMenu());
                 }));
@@ -85,8 +87,25 @@ public class PlaySound extends Action {
      * @param pitch  The pitch, between 0.0f and 1.0f
      * @param volume The volume, between 0.0f and 1.0f
      */
+    public PlaySound(String sound, float volume, float pitch, int delay, Condition.SelectionMode mode, List<Condition> conditionals, int cooldown) {
+        super(delay, mode, conditionals, cooldown);
+        this.sound = sound;
+        this.volume = volume;
+        this.pitch = pitch;
+    }
+
+    /**
+     * Creates a new SendMessage with the specified message
+     *
+     * @param sound  The sound enum constants
+     * @param pitch  The pitch, between 0.0f and 1.0f
+     * @param volume The volume, between 0.0f and 1.0f
+     * @deprecated Use {@link PlaySound#PlaySound(String, float, float, int, Condition.SelectionMode, List, int)}
+     */
+    @Deprecated
+    @ApiStatus.ScheduledForRemoval(inVersion = "1.9")
     public PlaySound(String sound, float volume, float pitch, int delay, Condition.SelectionMode mode, List<Condition> conditionals) {
-        super(delay, mode, conditionals);
+        super(delay, mode, conditionals, 0);
         this.sound = sound;
         this.volume = volume;
         this.pitch = pitch;
@@ -102,7 +121,7 @@ public class PlaySound extends Action {
 
         ParseResult pr = parseBase(serialized);
 
-        PlaySound message = new PlaySound(sound, volume, pitch, pr.delay(), pr.mode(), pr.conditions());
+        PlaySound message = new PlaySound(sound, volume, pitch, pr.delay(), pr.mode(), pr.conditions(), pr.cooldown());
 
         return clazz.cast(message);
     }
@@ -134,6 +153,7 @@ public class PlaySound extends Action {
         if (!processConditions(player)) return;
         Sound sound = Sound.sound(Key.key(this.sound), Sound.Source.MASTER, volume, pitch);
         player.playSound(sound);
+        activateCooldown(player.getUniqueId());
     }
 
     @Override
@@ -142,7 +162,7 @@ public class PlaySound extends Action {
     }
 
     public Action clone() {
-        return new PlaySound(sound, volume, pitch, getDelay(), getMode(), new ArrayList<>(getConditions()));
+        return new PlaySound(sound, volume, pitch, getDelay(), getMode(), new ArrayList<>(getConditions()), getCooldown());
     }
 
     @Override
@@ -249,7 +269,7 @@ public class PlaySound extends Action {
                                 Player p = (Player) event.getWhoClicked();
                                 CustomNPCs plugin = CustomNPCs.getInstance();
                                 p.closeInventory();
-                                plugin.soundWaiting.add(p.getUniqueId());
+                                plugin.wait(p, WaitingType.SOUND);
                                 new SoundRunnable(p, plugin).runTaskTimer(plugin, 0, 10);
                             })))
 

@@ -31,13 +31,11 @@ import dev.foxikle.customnpcs.actions.conditions.NumericCondition;
 import dev.foxikle.customnpcs.data.Equipment;
 import dev.foxikle.customnpcs.internal.CustomNPCs;
 import dev.foxikle.customnpcs.internal.interfaces.InternalNpc;
-import dev.foxikle.customnpcs.internal.runnables.InteractableHologramRunnable;
-import dev.foxikle.customnpcs.internal.runnables.PlayerNameRunnable;
-import dev.foxikle.customnpcs.internal.runnables.TargetInputRunnable;
-import dev.foxikle.customnpcs.internal.runnables.UrlRunnable;
+import dev.foxikle.customnpcs.internal.runnables.*;
 import dev.foxikle.customnpcs.internal.utils.Msg;
 import dev.foxikle.customnpcs.internal.utils.OpenButtonAction;
 import dev.foxikle.customnpcs.internal.utils.Utils;
+import dev.foxikle.customnpcs.internal.utils.WaitingType;
 import io.github.mqzen.menus.base.pagination.exception.InvalidPageException;
 import io.github.mqzen.menus.misc.button.Button;
 import io.github.mqzen.menus.misc.button.actions.ButtonClickAction;
@@ -48,13 +46,14 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -70,70 +69,21 @@ public class MenuItems {
                 ButtonClickAction.plain((menuView, event) -> event.setCancelled(true)));
     }
 
-    public static Button rotation(InternalNpc npc, Player player) {
-        double dir = npc.getSpawnLoc().getYaw();
+    public static Button changeLines(InternalNpc npc, Player player) {
 
-        List<Component> lore = new ArrayList<>();
-        Map<Integer, Integer> highlightIndexMap = Map.of(180, 0, -135, 1, -90, 2, -45, 3, 0, 4, 45, 5, 90, 6, 135, 7);
-        Component clickToChange = Msg.translate(player.locale(), "customnpcs.items.click_to_change");
-        List<Component> directions = List.of(Msg.translate(player.locale(), "customnpcs.directions.north"), Msg.translate(player.locale(), "customnpcs.directions.north_east"), Msg.translate(player.locale(), "customnpcs.directions.east"), Msg.translate(player.locale(), "customnpcs.directions.south_east"), Msg.translate(player.locale(), "customnpcs.directions.south"), Msg.translate(player.locale(), "customnpcs.directions.south_west"), Msg.translate(player.locale(), "customnpcs.directions.west"), Msg.translate(player.locale(), "customnpcs.directions.north_west"), Msg.translate(player.locale(), "customnpcs.directions.player"));
-        int highlightIndex = highlightIndexMap.getOrDefault((int) dir, 8);
-        lore.add(Component.empty());
+        Component lines = Component.empty();
 
-        for (int i = 0; i < directions.size(); ++i) {
-            Component direction = directions.get(i);
-            if (i == highlightIndex) {
-                direction = direction.color(NamedTextColor.DARK_AQUA);
-                direction = Utils.mm("<dark_aqua>▸ ").append(direction);
-            }
-
-            lore.add(direction);
+        for (int i = 0; i < npc.getSettings().getHolograms().length; i++) {
+            Component holo = npc.getSettings().getHolograms()[i];
+            lines = lines.append(Msg.format("   <dark_gray>" + (i + 1) + ". ").append(holo)).append(Component.newline());
         }
 
-        lore.add(Component.empty());
-        lore.add(clickToChange);
+        Component[] lore = Msg.vlore(player.locale(), "customnpcs.menus.main.items.name.current_name", 100, lines);
 
-        ItemStack item = ItemBuilder.modern(COMPASS)
-                .setLore(lore)
-                .setDisplay(Msg.translate(player.locale(), "customnpcs.menus.main.facing_direction.name"))
-                .build();
-
-        return Button.clickable(item, ButtonClickAction.plain((menuView, event) -> {
-            event.setCancelled(true);
-            Player p = (Player) event.getWhoClicked();
-            p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
-
-            double newDir = 0.0D;
-            if (event.isLeftClick()) {
-                if (dir % 45.0D != 0.0D) {
-                    newDir = 180.0D;
-                } else {
-                    newDir = (dir + 225.0D) % 360.0D - 180.0D;
-                    if (dir == 135.0D) {
-                        newDir = p.getLocation().getYaw();
-                    }
-                }
-            } else if (event.isRightClick()) {
-                if (dir % 45.0D != 0.0D) {
-                    newDir = 135.0D;
-                } else {
-                    newDir = (dir - 225.0D) % 360.0D + 180.0D;
-                    if (dir == 180.0D) {
-                        newDir = p.getLocation().getYaw();
-                    }
-                }
-            }
-
-            npc.getSpawnLoc().setYaw((float) newDir);
-            menuView.replaceButton(10, rotation(npc, p));
-        }));
-    }
-
-    public static ItemStack changeName(InternalNpc npc, Player player) {
-        return ItemBuilder.modern(Material.NAME_TAG)
+        return Button.clickable(ItemBuilder.modern(Material.NAME_TAG)
                 .setDisplay(Msg.translate(player.locale(), "customnpcs.menus.main.items.name.name"))
-                .setLore(Msg.translate(player.locale(), "customnpcs.menus.main.items.name.current_name", plugin.getMiniMessage().deserialize(npc.getSettings().getName())))
-                .build();
+                .setLore(lore)
+                .build(), new OpenButtonAction(MenuUtils.NPC_HOLOGRAMS));
     }
 
     public static Button resilient(InternalNpc npc, Player player) {
@@ -319,7 +269,7 @@ public class MenuItems {
                     ButtonClickAction.plain((menuView, event) -> {
                         Player p = (Player) event.getWhoClicked();
                         event.setCancelled(true);
-                        if (event.getCursor().getType().name().contains("CHESTPLATE")) {
+                        if (event.getCursor().getType().name().contains("CHESTPLATE") || event.getCursor().getType() == Material.ELYTRA) {
                             npc.getEquipment().setChest(event.getCursor().clone());
                             event.getCursor().setAmount(0);
                             p.playSound(p.getLocation(), Sound.ITEM_ARMOR_EQUIP_LEATHER, 1, 1);
@@ -348,7 +298,7 @@ public class MenuItems {
                             p.sendMessage(Msg.translate(p.locale(), "customnpcs.menus.equipment.chestplate.reset"));
                             menuView.replaceButton(22, chestplateSlot(npc, p));
                             return;
-                        } else if (event.getCursor().getType().name().contains("CHESTPLATE")) {
+                        } else if (event.getCursor().getType().name().contains("CHESTPLATE") || event.getCursor().getType() == Material.ELYTRA) {
                             npc.getEquipment().setChest(event.getCursor().clone());
                             event.getCursor().setAmount(0);
                             p.playSound(p.getLocation(), Sound.ITEM_ARMOR_EQUIP_LEATHER, 1, 1);
@@ -566,6 +516,11 @@ public class MenuItems {
                 new OpenButtonAction(MenuUtils.NPC_MAIN));
     }
 
+    public static Button toPose(Player player) {
+        return Button.clickable(ItemBuilder.modern(SNIFFER_EGG).setDisplay(Msg.translate(player.locale(), "customnpcs.pose.pose_editor")).build(),
+                new OpenButtonAction(MenuUtils.NPC_POSE));
+    }
+
     public static Button toAction(Player player) {
         return Button.clickable(ItemBuilder.modern(ARROW).setDisplay(Msg.translate(player.locale(), "customnpcs.items.go_back")).build(),
                 new OpenButtonAction(MenuUtils.NPC_ACTIONS));
@@ -625,6 +580,114 @@ public class MenuItems {
         return buttons;
     }
 
+    public static List<Button> currentLines(InternalNpc npc, Player player) {
+        List<Button> buttons = new ArrayList<>();
+
+        String[] raw = npc.getSettings().getRawHolograms();
+        List<String> mutable = Utils.list(raw);
+        for (int i = 0; i < raw.length; i++) {
+            String line = raw[i];
+            List<Component> lore = Utils.list(
+                    Msg.format(line), Component.empty(),
+                    Msg.translate(player.locale(), "customnpcs.menus.holograms.edit"),
+                    Msg.translate(player.locale(), "customnpcs.menus.holograms.delete")
+            );
+            boolean canMoveDown = i < raw.length - 1;
+            boolean canMoveUp = i > 0;
+
+            if (canMoveDown) lore.add(Msg.translate(player.locale(), "customnpcs.menus.holograms.move_down"));
+            if (canMoveUp) lore.add(Msg.translate(player.locale(), "customnpcs.menus.holograms.move_up"));
+
+            int finalI = i;
+            buttons.add(Button.clickable(ItemBuilder.modern(PAPER)
+                            .setDisplay(Msg.translate(player.locale(), "customnpcs.menus.holograms.line", (i + 1)))
+                            .setLore(lore).build(),
+                    ButtonClickAction.plain((menuView, event) -> {
+                        event.setCancelled(true);
+                        Player p = (Player) event.getWhoClicked();
+
+                        // DROP is delete
+                        // DROP_STACK is delete without confirmation
+                        // SWAP TO OFFHAND is edit
+                        // LEFT is up
+                        // RIGHT is down
+
+                        if (event.getClick() == ClickType.DROP) {
+                            HologramMenu.editingIndicies.put(p.getUniqueId(), finalI);
+                            plugin.getLotus().openMenu(p, MenuUtils.NPC_DELETE_LINE);
+                            return;
+                        }
+                        if (event.getClick() == ClickType.CONTROL_DROP) {
+                            mutable.remove(finalI);
+                            player.playSound(p.getLocation(), Sound.ITEM_TRIDENT_HIT, 1F, 1F);
+                            npc.getSettings().setRawHolograms(mutable.toArray(new String[0]));
+                            plugin.getLotus().openMenu(p, MenuUtils.NPC_HOLOGRAMS);
+                            return;
+                        }
+                        if (event.getClick() == ClickType.SWAP_OFFHAND) {
+                            p.sendMessage(Msg.translate(p.locale(), "customnpcs.data.name.title"));
+
+                            plugin.wait(p, WaitingType.NAME);
+
+                            p.playSound(p, Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
+                            HologramMenu.editingIndicies.put(p.getUniqueId(), finalI);
+                            new NameRunnable(p, plugin).runTaskTimer(plugin, 1, 15);
+                            p.closeInventory();
+
+                            if (plugin.getConfig().getBoolean("NameReferenceMessages")) {
+                                p.sendMessage(Msg.translate(p.locale(), "customnpcs.name.reference"));
+                                p.sendMessage(line);
+                                p.sendMessage(Msg.translate(p.locale(), "customnpcs.name.toggle_reference_message"));
+                            }
+                            return;
+                        }
+
+                        if (event.isLeftClick()) {
+                            if (!canMoveUp) {
+                                p.sendMessage(Msg.translate(p.locale(), "customnpcs.menus.holograms.move_up_fail"));
+                                p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1F, 1F);
+                                return;
+                            }
+
+                            Collections.swap(mutable, finalI, finalI - 1);
+                            npc.getSettings().setRawHolograms(mutable.toArray(new String[0]));
+                            plugin.getLotus().openMenu(p, MenuUtils.NPC_HOLOGRAMS);
+                            p.playSound(p.getLocation(), Sound.BLOCK_PISTON_EXTEND, .7F, .9F);
+                            return;
+                        }
+
+                        if (!canMoveDown) {
+                            p.sendMessage(Msg.translate(p.locale(), "customnpcs.menus.holograms.move_down_fail"));
+                            p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1F, 1F);
+                            return;
+                        }
+
+                        Collections.swap(mutable, finalI, finalI + 1);
+                        npc.getSettings().setRawHolograms(mutable.toArray(new String[0]));
+                        plugin.getLotus().openMenu(p, MenuUtils.NPC_HOLOGRAMS);
+                        p.playSound(p.getLocation(), Sound.BLOCK_PISTON_CONTRACT, .7F, .9F);
+                    })));
+        }
+
+        buttons.add(Button.clickable(ItemBuilder.modern(LILY_PAD)
+                        .setDisplay(Msg.translate(player.locale(), "customnpcs.menus.holograms.new_line"))
+                        .build(),
+                ButtonClickAction.plain((menuView, event) -> {
+                    event.setCancelled(true);
+                    Player p = (Player) event.getWhoClicked();
+
+                    plugin.wait(p, WaitingType.NAME);
+
+                    p.playSound(p, Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
+                    HologramMenu.editingIndicies.put(p.getUniqueId(), raw.length);
+                    new NameRunnable(p, plugin).runTaskTimer(plugin, 1, 15);
+                    p.closeInventory();
+                })
+        ));
+
+        return buttons;
+    }
+
     public static Button delayDisplay(Action action, Player player) {
         return Button.clickable(ItemBuilder.modern(CLOCK)
                 .setDisplay(Msg.translate(player.locale(), "customnpcs.menus.action_customizer.delay.name", action.getDelay()))
@@ -651,7 +714,7 @@ public class MenuItems {
                     } else if (event.isRightClick()) {
                         action.setDelay(Math.max(0, action.getDelay() - 5));
                     }
-                    menuView.updateButton(4, button -> button.setItem(delayDisplay(action, p).getItem()));
+                    menuView.updateButton(1, button -> button.setItem(delayDisplay(action, p).getItem()));
                 }));
     }
 
@@ -671,7 +734,57 @@ public class MenuItems {
                     }
                     Player p = (Player) event.getWhoClicked();
                     p.playSound(p, Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
-                    menuView.updateButton(4, button -> button.setItem(delayDisplay(action, p).getItem()));
+                    menuView.updateButton(1, button -> button.setItem(delayDisplay(action, p).getItem()));
+                }));
+    }
+
+    public static Button cooldownDisplay(Action action, Player player) {
+        return Button.clickable(ItemBuilder.modern(CLOCK)
+                .setDisplay(Msg.translate(player.locale(), "customnpcs.menus.action_customizer.cooldown.name", action.getCooldown()))
+                .build(), ButtonClickAction.plain((menuView, event) -> event.setCancelled(true)));
+    }
+
+    public static Button decrementCooldown(Action action, Player player) {
+        return Button.clickable(ItemBuilder.modern(RED_DYE)
+                        .setDisplay(Msg.translate(player.locale(), "customnpcs.menus.action_customizer.cooldown.decrement"))
+                        .setLore(Msg.lore(player.locale(), "customnpcs.menus.action_customizer.cooldown.decrement.description"))
+                        .build(),
+                ButtonClickAction.plain((menuView, event) -> {
+                    event.setCancelled(true);
+                    Player p = (Player) event.getWhoClicked();
+                    p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
+                    if (action.getCooldown() == 0) {
+                        p.sendMessage(Msg.translate(p.locale(), "customnpcs.menus.action_customizer.cooldown.error"));
+                        return;
+                    }
+                    if (event.isShiftClick()) {
+                        action.setCooldown(Math.max(0, action.getCooldown() - 20));
+                    } else if (event.isLeftClick()) {
+                        action.setCooldown(Math.max(0, action.getCooldown() - 1));
+                    } else if (event.isRightClick()) {
+                        action.setCooldown(Math.max(0, action.getCooldown() - 5));
+                    }
+                    menuView.updateButton(7, button -> button.setItem(cooldownDisplay(action, p).getItem()));
+                }));
+    }
+
+    public static Button incrementCooldown(Action action, Player player) {
+        return Button.clickable(ItemBuilder.modern(LIME_DYE)
+                        .setDisplay(Msg.translate(player.locale(), "customnpcs.menus.action_customizer.cooldown.increment"))
+                        .setLore(Msg.lore(player.locale(), "customnpcs.menus.action_customizer.cooldown.increment.description"))
+                        .build(),
+                ButtonClickAction.plain((menuView, event) -> {
+                    event.setCancelled(true);
+                    if (event.isShiftClick()) {
+                        action.setCooldown(action.getCooldown() + 20);
+                    } else if (event.isLeftClick()) {
+                        action.setCooldown(action.getCooldown() + 1);
+                    } else if (event.isRightClick()) {
+                        action.setCooldown(action.getCooldown() + 5);
+                    }
+                    Player p = (Player) event.getWhoClicked();
+                    p.playSound(p, Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
+                    menuView.updateButton(7, button -> button.setItem(cooldownDisplay(action, p).getItem()));
                 }));
     }
 
@@ -779,7 +892,7 @@ public class MenuItems {
             Player p = (Player) event.getWhoClicked();
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
             p.closeInventory();
-            plugin.targetWaiting.add(p.getUniqueId());
+            plugin.wait(p, WaitingType.TARGET);
             new TargetInputRunnable(p, plugin).runTaskTimer(plugin, 0, 10);
         }));
     }
@@ -850,7 +963,7 @@ public class MenuItems {
             p.playSound(p, Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
             event.setCancelled(true);
             npc.getSettings().setHideClickableHologram(!hideClickableTag);
-            menuView.replaceButton(12, interactableHologram(npc, p));
+            menuView.replaceButton(11, interactableHologram(npc, p));
         }));
     }
 
@@ -864,11 +977,30 @@ public class MenuItems {
             event.setCancelled(true);
             Player p = (Player) event.getWhoClicked();
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
-            plugin.hologramWaiting.add(p.getUniqueId());
+            plugin.wait(p, WaitingType.HOLOGRAM);
 
             p.closeInventory();
             p.sendMessage(Msg.translate(p.locale(), "customnpcs.menus.extra.hologram_text.type"));
             new InteractableHologramRunnable(p, plugin).runTaskTimer(plugin, 0, 10);
+        }));
+    }
+
+    public static Button upsideDown(InternalNpc npc, Player player) {
+        boolean upsideDown = npc.getSettings().isHideClickableHologram();
+        ItemStack i = ItemBuilder.modern(upsideDown ? RED_CANDLE : GREEN_CANDLE)
+                .setDisplay(Msg.translate(player.locale(), "customnpcs.menus.extra.upside_down"))
+                .setLore(
+                        Component.empty(),
+                        Msg.translate(player.locale(), "customnpcs.menus.extra.upside_down.description"),
+                        upsideDown ? Msg.translate(player.locale(), "customnpcs.menus.extra.upside_down.description.false") : Msg.translate(player.locale(), "customnpcs.menus.extra.upside_down.description.true")
+                ).build();
+
+        return Button.clickable(i, ButtonClickAction.plain((menuView, event) -> {
+            Player p = (Player) event.getWhoClicked();
+            p.playSound(p, Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
+            event.setCancelled(true);
+            npc.getSettings().setUpsideDown(!upsideDown);
+            menuView.replaceButton(15, upsideDown(npc, p));
         }));
     }
 
@@ -883,7 +1015,7 @@ public class MenuItems {
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
             p.closeInventory();
 
-            plugin.playerWaiting.add(p.getUniqueId());
+            plugin.wait(p, WaitingType.PLAYER);
             new PlayerNameRunnable(p, plugin).runTaskTimer(plugin, 0, 10);
             event.setCancelled(true);
         }));
@@ -919,7 +1051,7 @@ public class MenuItems {
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1.0F, 1.0F);
             p.closeInventory();
 
-            plugin.urlWaiting.add(p.getUniqueId());
+            plugin.wait(p, WaitingType.URL);
             new UrlRunnable(p, plugin).runTaskTimer(plugin, 0, 10);
             event.setCancelled(true);
         }));

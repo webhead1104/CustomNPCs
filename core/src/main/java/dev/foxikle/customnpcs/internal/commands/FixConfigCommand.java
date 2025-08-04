@@ -42,6 +42,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+@SubCommand(value = "fixconfig", attachment = AttachmentMode.MAIN)
+@Permission("customnpcs.commands.fix_config")
 public class FixConfigCommand {
 
     @Usage

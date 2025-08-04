@@ -45,7 +45,7 @@ import dev.foxikle.customnpcs.internal.storage.StorageManager;
 import dev.foxikle.customnpcs.internal.translations.Translations;
 import dev.foxikle.customnpcs.internal.utils.ActionRegistry;
 import dev.foxikle.customnpcs.internal.utils.AutoUpdater;
-import dev.foxikle.customnpcs.internal.utils.Utils;
+import dev.foxikle.customnpcs.internal.utils.WaitingType;
 import dev.velix.imperat.BukkitImperat;
 import dev.velix.imperat.BukkitSource;
 import dev.velix.imperat.Imperat;
@@ -66,12 +66,11 @@ import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.plugin.messaging.PluginMessageListener;
-import org.bukkit.scoreboard.Team;
 import org.jetbrains.annotations.NotNull;
-import org.mineskin.MineskinClient;
 
 import javax.annotation.Nullable;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -97,10 +96,6 @@ public final class CustomNPCs extends JavaPlugin implements PluginMessageListene
     private static Gson gson;
 
     /**
-     * The client for the MineSkin API
-     */
-    public final MineskinClient MINESKIN_CLIENT = new MineskinClient("MineSkin-JavaClient");
-    /**
      * This may contain NPCs that do not yet exist, as they are in the process of creation.
      */
     @Getter
@@ -110,64 +105,16 @@ public final class CustomNPCs extends JavaPlugin implements PluginMessageListene
      */
     @Getter
     private final Cache<UUID, Boolean> deltionReason = CacheBuilder.newBuilder().expireAfterWrite(1, TimeUnit.MINUTES).expireAfterAccess(1, TimeUnit.MINUTES).build();
-    private final String[] COMPATIBLE_VERSIONS = {"1.20", "1.20.1", "1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6", "1.21", "1.21.1", "1.21.2", "1.21.3", "1.21.4"};
+    private final String[] COMPATIBLE_VERSIONS = {"1.20", "1.20.1", "1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6", "1.21", "1.21.1", "1.21.2", "1.21.3", "1.21.4", "1.21.5", "1.21.6", "1.21.7", "1.21.8"};
     private final String NPC_CLASS = "dev.foxikle.customnpcs.versions.NPC_%s";
     /**
-     * The List of players the plugin is waiting for title text input
+     * The map of what the plugin is waiting for the players to enter.
      */
-    public List<UUID> titleWaiting = new ArrayList<>();
-    /**
-     * The List of players the plugin is waiting for subtitle text input
-     */
-    public List<UUID> subtitleWaiting = new ArrayList<>();
-    /**
-     * The List of players the plugin is waiting for title text input
-     */
-    public List<UUID> targetWaiting = new ArrayList<>();
-    /**
-     * The List of players the plugin is waiting for server name text input
-     */
-    public List<UUID> serverWaiting = new ArrayList<>();
-    /**
-     * The List of players the plugin is waiting for action bar text input
-     */
-    public List<UUID> actionbarWaiting = new ArrayList<>();
-    /**
-     * The List of players the plugin is waiting for message text input
-     */
-    public List<UUID> messageWaiting = new ArrayList<>();
-    /**
-     * The List of players the plugin is waiting for confirmation on.
-     */
-    public List<UUID> facingWaiting = new ArrayList<>();
-    /**
-     * The List of players the plugin is waiting for command input
-     */
-    public List<UUID> commandWaiting = new ArrayList<>();
-    /**
-     * The List of players the plugin is waiting for name text input
-     */
-    public List<UUID> nameWaiting = new ArrayList<>();
-    /**
-     * The List of players the plugin is waiting for sound text input
-     */
-    public List<UUID> soundWaiting = new ArrayList<>();
-    /**
-     * The List of players the plugin is waiting for url input
-     */
-    public List<UUID> urlWaiting = new ArrayList<>();
-    /**
-     * The List of players the plugin is waiting for player name input
-     */
-    public List<UUID> playerWaiting = new ArrayList<>();
-    /**
-     * The list of player the plugin is waiting for input from
-     */
-    public List<UUID> hologramWaiting = new ArrayList<>();
+    public Map<UUID, WaitingType> waiting = new ConcurrentHashMap<>();
     /**
      * The List of NPC holograms
      */
-    public List<TextDisplay> holograms = new ArrayList<>();
+    public List<List<TextDisplay>> holograms = new ArrayList<>();
     /**
      * The Map of NPCs keyed by their UUIDs
      */
@@ -231,6 +178,8 @@ public final class CustomNPCs extends JavaPlugin implements PluginMessageListene
      */
     @Override
     public void onEnable() {
+        // paper... why??
+        System.setProperty("org.bukkit.plugin.java.LibraryLoader.centralURL", "https://repo1.maven.org/maven2");
         instance = this;
 
         if (!checkForValidVersion()) {
@@ -254,8 +203,6 @@ public final class CustomNPCs extends JavaPlugin implements PluginMessageListene
 
 
         new Translations().setup();
-
-        registerNpcTeam();
 
         gson = new GsonBuilder()
                 .registerTypeAdapter(Condition.class, new ConditionalTypeAdapter())
@@ -382,6 +329,9 @@ public final class CustomNPCs extends JavaPlugin implements PluginMessageListene
         lotus.registerMenu(new NewConditionMenu());
         lotus.registerMenu(new SkinCatalog());
         lotus.registerMenu(new SkinMenu());
+        lotus.registerMenu(new HologramMenu());
+        lotus.registerMenu(new DeleteLineMenu());
+        lotus.registerMenu(new PoseEditorMenu());
 
         // prevent reload goofery
         if (!System.getProperties().containsKey("CUSTOMNPCS_LOADED")) {
@@ -399,20 +349,6 @@ public final class CustomNPCs extends JavaPlugin implements PluginMessageListene
         }
 
         System.setProperty("CUSTOMNPCS_LOADED", "true");
-    }
-
-    private void registerNpcTeam() {
-        Team team;
-        try {
-            team = Bukkit.getScoreboardManager().getMainScoreboard().registerNewTeam("npc");
-        } catch (IllegalArgumentException ignored) {
-            team = Bukkit.getScoreboardManager().getMainScoreboard().getTeam("npc");
-        }
-        if (team == null) throw new NullPointerException("There was an error whilst creating the NPC team!");
-        team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
-        if (getConfig().getBoolean("DisableCollisions"))
-            team.setOption(Team.Option.COLLISION_RULE, Team.OptionStatus.NEVER);
-        team.prefix(Utils.mm("<dark_gray>[NPC] "));
     }
 
     /**
@@ -433,8 +369,8 @@ public final class CustomNPCs extends JavaPlugin implements PluginMessageListene
      */
     @Override
     public void onDisable() {
-        for (TextDisplay t : holograms) {
-            if (t != null) t.remove();
+        for (List<TextDisplay> t : holograms) {
+            if (t != null) t.forEach(TextDisplay::remove);
         }
         if (listeners != null) listeners.stop();
 
@@ -443,10 +379,6 @@ public final class CustomNPCs extends JavaPlugin implements PluginMessageListene
         this.getServer().getMessenger().unregisterIncomingPluginChannel(this);
         this.getServer().getMessenger().unregisterIncomingPluginChannel(this);
         Bukkit.getScheduler().cancelTasks(this);
-        try {
-            Objects.requireNonNull(Bukkit.getScoreboardManager().getMainScoreboard().getTeam("npc")).unregister();
-        } catch (IllegalArgumentException | NullPointerException ignored) {
-        }
         for (InternalNpc npc : npcs.values()) {
             npc.remove();
         }
@@ -480,7 +412,7 @@ public final class CustomNPCs extends JavaPlugin implements PluginMessageListene
      * @param npc      The NPC to add
      * @param hologram the TextDisplay representing the NPC's name
      */
-    public void addNPC(InternalNpc npc, TextDisplay hologram) {
+    public void addNPC(InternalNpc npc, List<TextDisplay> hologram) {
         holograms.add(hologram);
         npcs.put(npc.getUniqueID(), npc);
     }
@@ -555,6 +487,8 @@ public final class CustomNPCs extends JavaPlugin implements PluginMessageListene
             case "1.21", "1.21.1" -> "v1_21_R0";
             case "1.21.2", "1.21.3" -> "v1_21_R1";
             case "1.21.4" -> "v1_21_R2";
+            case "1.21.5" -> "v1_21_R3";
+            case "1.21.6", "1.21.7", "1.21.8" -> "v1_21_R4";
             default -> "";
         };
     }
@@ -582,6 +516,14 @@ public final class CustomNPCs extends JavaPlugin implements PluginMessageListene
         logger.severe("+------------------------------------------------------------------------------+");
         logger.severe("");
         logger.severe("");
+    }
+
+    public boolean isWaiting(Player player, WaitingType type) {
+        return waiting.getOrDefault(player.getUniqueId(), null) == type;
+    }
+
+    public void wait(Player player, WaitingType type) {
+        waiting.put(player.getUniqueId(), type);
     }
 
     public Pagination getSkinCatalog(Player player) {
