@@ -103,6 +103,7 @@ public class ProtoWrapper {
                 settings.getClickable(),
                 settings.getTunnelVision(),
                 settings.getResilient(),
+                180,
                 settings.getValue(),
                 settings.getSignature(),
                 settings.getSkinName(),

@@ -169,7 +169,7 @@ public class NPC_v1_20_R2 extends ServerPlayer implements InternalNpc {
         super.getBukkitEntity().setItemInHand(equipment.getHand());
         setPose(setupPose(settings.getPose()));
 
-        if (settings.isResilient()) plugin.getFileManager().addNPC(this);
+        if (settings.isResilient()) plugin.getStorageManager().addNPC(this);
         plugin.addNPC(this, holograms);
 
         injectionManager = new InjectionManager(plugin, this);
@@ -389,7 +389,7 @@ public class NPC_v1_20_R2 extends ServerPlayer implements InternalNpc {
     }
 
     public void delete() {
-        plugin.getFileManager().remove(this.uniqueID);
+        plugin.getStorageManager().remove(this.uniqueID);
     }
 
     @Override

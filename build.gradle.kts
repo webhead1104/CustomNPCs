@@ -24,7 +24,7 @@ plugins {
     `java-library`
     `maven-publish`
     id("xyz.jpenilla.run-paper") version "2.3.1"
-    id("io.github.goooler.shadow") version "8.1.8"
+    id("com.gradleup.shadow") version "9.0.0-rc3"
     id("io.papermc.paperweight.userdev") version "2.0.0-beta.18" apply false
 }
 
@@ -138,6 +138,10 @@ tasks {
                 providers.gradleProperty("plugin_dir").orElse(destinationDirectory.get().toString())
             )
         )
+    }
+
+    runServer {
+        version.set("1.21.8")
     }
 }
 

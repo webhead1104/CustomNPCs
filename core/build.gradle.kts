@@ -23,7 +23,7 @@
 plugins {
     id("java")
     id("io.freefair.lombok") version "8.14"
-    id("io.github.goooler.shadow") version "8.1.8"
+    id("com.gradleup.shadow") version "9.0.0-rc3"
 }
 
 repositories {

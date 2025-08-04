@@ -187,7 +187,7 @@ public class NPC_v1_20_R1 extends ServerPlayer implements InternalNpc {
         setPose(setupPose(settings.getPose()));
 
         if (settings.isResilient()) plugin.getStorageManager().addNPC(this);
-        plugin.addNPC(this, hologram);
+        plugin.addNPC(this, holograms);
 
         injectionManager = new InjectionManager(plugin, this);
         injectionManager.setup();

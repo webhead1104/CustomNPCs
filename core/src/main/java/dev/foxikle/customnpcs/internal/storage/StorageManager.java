@@ -718,7 +718,23 @@ public class StorageManager {
             actions.add(Action.parse(s));
         }
 
-        InternalNpc npc = plugin.createNPC(world, location, new Equipment(section.getItemStack("headItem"), section.getItemStack("chestItem"), section.getItemStack("legsItem"), section.getItemStack("feetItem"), section.getItemStack("handItem"), section.getItemStack("offhandItem")), new Settings(section.getBoolean("clickable"), section.getBoolean("tunnelvision"), true, section.getString("value"), section.getString("signature"), section.getString("skin"), section.getString("name"), section.getString("customHologram"), section.getBoolean("hideInteractableHologram")), uuid, null, actions);
+        InternalNpc npc = plugin.createNPC(world, location,
+                new Equipment(section.getItemStack("headItem"),
+                        section.getItemStack("chestItem"),
+                        section.getItemStack("legsItem"),
+                        section.getItemStack("feetItem"),
+                        section.getItemStack("handItem"),
+                        section.getItemStack("offhandItem")),
+                new Settings(section.getBoolean("clickable"),
+                        section.getBoolean("tunnelvision"),
+                        true,
+                        180,
+                        section.getString("value"),
+                        section.getString("signature"),
+                        section.getString("skin"),
+                        section.getString("name"),
+                        section.getString("customHologram"),
+                        section.getBoolean("hideInteractableHologram")), uuid, null, actions);
 
         return ProtoWrapper.toProtoNpc(npc);
     }
